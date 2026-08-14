@@ -15,37 +15,11 @@
 package updater
 
 import (
-	"bufio"
-	"fmt"
 	"os"
-	"strings"
 
 	"github.com/valet-sh/cli/constants"
 	"github.com/valet-sh/cli/internal/ansible"
-	"github.com/valet-sh/cli/internal/style"
 )
-
-var migrationText = `
-┌────────────────────────────────────────────────────────────────────┐
-│ valet.sh — Migration Required (v2.x Detected)                      │
-└────────────────────────────────────────────────────────────────────┘
-
-  WARNING: Existing services will be uninstalled and NO database
-  dumps will be generated automatically.
-
-  Please backup all critical database and application data.
-
-  Post-Migration Environment:
-  • Base Services Installed: Nginx, Dnsmasq, Mailpit, Container Runtime
-    (Podman/Apple Container)
-  • Optional Services Removed: PHP, MySQL, MariaDB, RabbitMQ, etc.
-    (Must be re-installed on demand)
-
-  For migration support and manual backup steps, visit:
-  https://valet.sh/3.x/how-to-articles/migrating-from-2.x-to-3.x
-
-
-`
 
 func CheckMigration(repoDir string) error {
 	if PlaybookBranch != "3.x" {
@@ -58,40 +32,10 @@ func CheckMigration(repoDir string) error {
 	bundleExists := err == nil
 
 	if serviceExists || (serviceExists && bundleExists) {
-		fmt.Println(style.Yellow(os.Stdout, migrationText))
-
-		fmt.Println(style.Info(os.Stdout, "Type 'migrate' to proceed, or press [Enter] to cancel/skip: "))
-
-		reader := bufio.NewReader(os.Stdin)
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-
-		trimmedInput := strings.TrimSpace(input)
-
-		if trimmedInput == "" || trimmedInput != "migrate" {
-			fmt.Println("\n Migration canceled. Do you want to switch to the 2.x branch instead? (y/n): ")
-			confirmInput, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-
-			trimmedConfirmInput := strings.TrimSpace(confirmInput)
-
-			if trimmedConfirmInput == "y" || trimmedConfirmInput == "Y" {
-				if err := setChannel("2.x", repoDir); err != nil {
-					return fmt.Errorf("failed to switch to 2.x branch: %w", err)
-				}
-			} else {
-				fmt.Println(style.Yellow(os.Stdout, "Migration canceled"))
-				os.Exit(0)
-			}
-
+		if os.Getenv("VALET_MIGRATE") != "" {
+			ansible.SetVar("vsh_migrate", true)
 			return nil
 		}
-
-		ansible.SetVar("valet_migrate", true)
 	}
 
 	return nil
