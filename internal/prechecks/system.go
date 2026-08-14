@@ -99,9 +99,7 @@ func CheckSystemArchitecture() CheckResult {
 	return CheckResult{Passed: true}
 }
 
-func getMinOSVersion(osName string) (*version.Version, string) {
-	var minVersionStr string
-
+func getMinOSVersion(osName string) (minVersion *version.Version, minVersionStr string) {
 	switch osName {
 	case "darwin":
 		minVersionStr = constants.Vsh3xMinMacOSVersion
@@ -110,12 +108,11 @@ func getMinOSVersion(osName string) (*version.Version, string) {
 	default:
 		return nil, ""
 	}
-
-	minVersion, err := version.NewVersion(minVersionStr)
+	var err error
+	minVersion, err = version.NewVersion(minVersionStr)
 	if err != nil {
 		return nil, minVersionStr
 	}
-
 	return minVersion, minVersionStr
 }
 
