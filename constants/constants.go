@@ -4,6 +4,9 @@ const (
 	VshStableVersion = "3.x"
 	VshNextVersion   = "next"
 
+	Vsh3xMinMacOSVersion = "26.0"
+	Vsh3xMinLinuxVersion = "24.04"
+
 	VshRootPath = "/usr/local/valet-sh"
 
 	VshBasePath = VshRootPath + "/valet-sh"
