@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valet-sh/cli/internal/commands"
 	"github.com/valet-sh/cli/internal/platform"
+	"github.com/valet-sh/cli/internal/prechecks"
 	"github.com/valet-sh/cli/internal/setup"
 	"github.com/valet-sh/cli/internal/tui"
 	"github.com/valet-sh/cli/internal/updater"
@@ -30,6 +31,12 @@ import (
 var Version = "dev"
 
 func main() {
+
+	if err := prechecks.RequirementsCheck(); err != nil {
+		fmt.Fprintln(os.Stderr, commands.ErrorPrefix(err.Error()))
+		os.Exit(1)
+	}
+
 	vimMode := hasVIFlag(os.Args)
 	if vimMode {
 		os.Args = removeVIFlag(os.Args)
@@ -135,11 +142,12 @@ Configuration is driven by a .valet-sh.yml file in each project directory.`,
 	// Each playbook with a @command annotation becomes a cobra command.
 	// Playbooks with colon-separated names (e.g. project:env) are grouped
 	// under a parent command automatically.
+
 	discovered, err := commands.Discover(platform.RepoDir())
 	if err != nil {
 		// Non-fatal: if playbooks dir is missing (e.g. first-time install
 		// before valet-sh is cloned), the binary still starts and shows help.
-		fmt.Fprintf(os.Stderr, "warning: could not load commands from playbooks: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "warning: could not load commands from playbooks: %v\n", err)
 	} else {
 		commands.ApplyHooks(discovered)
 		cmd.AddCommand(discovered...)
