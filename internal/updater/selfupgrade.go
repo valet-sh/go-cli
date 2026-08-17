@@ -183,10 +183,6 @@ func EnsureRuntime(repoDir string) (bool, error) {
 		return false, err
 	}
 
-	if err := writeVersionFile(constants.VshRuntimeVersionFile, desired); err != nil {
-		fmt.Fprintf(os.Stderr, "  warning: could not save runtime version: %v\n", err)
-	}
-
 	fmt.Printf("%s Runtime updated to %s\n", style.Green(os.Stdout, "✓"), desired)
 	return true, nil
 }
@@ -244,14 +240,6 @@ func extractTar(tarPath, destDir string) error {
 		return fmt.Errorf("failed to extract runtime (sudo): %w", err)
 	}
 	return nil
-}
-
-// writeVersionFile writes version to path, creating parent directories as needed.
-func writeVersionFile(path, version string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(version+"\n"), 0o644)
 }
 
 func EnsurePlaybooks(repoDir, repoURL, branch string) (bool, error) {
