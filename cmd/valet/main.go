@@ -111,7 +111,7 @@ func newRootCmd() *cobra.Command {
 		Long: `valet.sh manages your local development environment for Magento, Neos,
 AEM, and other PHP-based projects. It handles multiple simultaneous versions
 of PHP, MySQL/MariaDB, Elasticsearch/OpenSearch, Redis, RabbitMQ, and nginx
-on both Ubuntu and macOS (Intel and Apple Silicon).
+on both Ubuntu and macOS (Apple Silicon).
 
 Configuration is driven by a .valet-sh.yml file in each project directory.`,
 		SilenceUsage:      true,
