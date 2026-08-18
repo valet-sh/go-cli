@@ -150,11 +150,9 @@ func (e ExecModel) SetSize(width, height int) ExecModel {
 	return e
 }
 
-// Init starts the spinner ticker, the process waiter, and the stdout event reader.
 func (e ExecModel) Init() tea.Cmd {
 	return tea.Batch(
 		tickCmd(),
-		waitForProcess(e.proc),
 		readTaskCmd(e.ansibleOut, e.output),
 	)
 }
@@ -164,12 +162,8 @@ func (e ExecModel) Update(msg tea.Msg) (ExecModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ansibleEventMsg:
 		if msg.eof {
-			// Quit in CLI success mode only when both this and execDoneMsg have arrived.
 			e.stdoutEOF = true
-			if e.done && e.err == nil {
-				return e, tea.Quit
-			}
-			return e, nil
+			return e, waitForProcess(e.proc)
 		}
 		if msg.taskName != "" {
 			e.currentTask = msg.taskName
@@ -352,7 +346,6 @@ func tickCmd() tea.Cmd {
 	})
 }
 
-// waitForProcess waits for the subprocess to exit and sends execDoneMsg.
 func waitForProcess(cmd *exec.Cmd) tea.Cmd {
 	return func() tea.Msg {
 		if cmd == nil {
