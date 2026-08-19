@@ -26,25 +26,33 @@ func wordWrap(text string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return text
 	}
-	words := strings.Fields(text)
-	var lines []string
-	var current strings.Builder
 
-	for _, word := range words {
-		switch {
-		case current.Len() == 0:
-			current.WriteString(word)
-		case current.Len()+1+len(word) <= maxWidth:
-			current.WriteByte(' ')
-			current.WriteString(word)
-		default:
-			lines = append(lines, current.String())
-			current.Reset()
-			current.WriteString(word)
+	inputLines := strings.Split(text, "\n")
+	var lines []string
+
+	for _, inputLine := range inputLines {
+		words := strings.Fields(inputLine)
+		if len(words) == 0 {
+			lines = append(lines, "")
+			continue
 		}
-	}
-	if current.Len() > 0 {
+
+		var current strings.Builder
+		for _, word := range words {
+			switch {
+			case current.Len() == 0:
+				current.WriteString(word)
+			case current.Len()+1+len(word) <= maxWidth:
+				current.WriteByte(' ')
+				current.WriteString(word)
+			default:
+				lines = append(lines, current.String())
+				current.Reset()
+				current.WriteString(word)
+			}
+		}
 		lines = append(lines, current.String())
 	}
+
 	return strings.Join(lines, "\n")
 }
