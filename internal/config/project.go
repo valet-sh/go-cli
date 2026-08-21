@@ -62,31 +62,31 @@ type ComposerService struct {
 }
 
 type NodeService struct {
-	Version interface{} `yaml:"version"` // string or int both accepted
+	Version any `yaml:"version"` // string or int both accepted
 }
 
 type PHPService struct {
-	Version interface{} `yaml:"version"` // e.g. 8.1 or "8.1"
+	Version any `yaml:"version"` // e.g. 8.1 or "8.1"
 }
 
 type MySQLService struct {
-	Version  interface{} `yaml:"version"`
-	Database string      `yaml:"database,omitempty"`
+	Version  any    `yaml:"version"`
+	Database string `yaml:"database,omitempty"`
 }
 
 type MariaDBService struct {
-	Version  interface{} `yaml:"version"`
-	Database string      `yaml:"database,omitempty"`
+	Version  any    `yaml:"version"`
+	Database string `yaml:"database,omitempty"`
 }
 
 type ElasticsearchService struct {
-	Version interface{} `yaml:"version"`
-	Plugins []string    `yaml:"plugins,omitempty"`
+	Version any      `yaml:"version"`
+	Plugins []string `yaml:"plugins,omitempty"`
 }
 
 type OpenSearchService struct {
-	Version interface{} `yaml:"version"`
-	Plugins []string    `yaml:"plugins,omitempty"`
+	Version any      `yaml:"version"`
+	Plugins []string `yaml:"plugins,omitempty"`
 }
 
 type RabbitMQService struct {
@@ -94,26 +94,26 @@ type RabbitMQService struct {
 }
 
 type RedisService struct {
-	Version interface{} `yaml:"version,omitempty"`
+	Version any `yaml:"version,omitempty"`
 }
 
 type ValkeyService struct {
-	Version interface{} `yaml:"version,omitempty"`
+	Version any `yaml:"version,omitempty"`
 }
 
 // InstanceConfig contains project-specific bootstrap configuration.
 type InstanceConfig struct {
-	Key             string                 `yaml:"key"`
-	Type            string                 `yaml:"type"`
-	Path            string                 `yaml:"path,omitempty"`
-	Multidomain     map[string]string      `yaml:"multidomain,omitempty"`
-	Sync            *SyncConfig            `yaml:"sync,omitempty"`
-	CryptKey        string                 `yaml:"crypt_key,omitempty"`
-	Crypt           *CryptConfig           `yaml:"crypt,omitempty"`
-	Config          map[string]interface{} `yaml:"config,omitempty"`
-	Session         map[string]interface{} `yaml:"session,omitempty"`
-	Cache           map[string]interface{} `yaml:"cache,omitempty"`
-	ProcessedConfig string                 `yaml:"processed_config,omitempty"`
+	Key             string            `yaml:"key"`
+	Type            string            `yaml:"type"`
+	Path            string            `yaml:"path,omitempty"`
+	Multidomain     map[string]string `yaml:"multidomain,omitempty"`
+	Sync            *SyncConfig       `yaml:"sync,omitempty"`
+	CryptKey        string            `yaml:"crypt_key,omitempty"`
+	Crypt           *CryptConfig      `yaml:"crypt,omitempty"`
+	Config          map[string]any    `yaml:"config,omitempty"`
+	Session         map[string]any    `yaml:"session,omitempty"`
+	Cache           map[string]any    `yaml:"cache,omitempty"`
+	ProcessedConfig string            `yaml:"processed_config,omitempty"`
 }
 
 type SyncConfig struct {

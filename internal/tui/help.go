@@ -78,10 +78,9 @@ func (m model) openHelp() (tea.Model, tea.Cmd) {
 
 // handleHelpKey handles key events in the help view.
 func (m model) handleHelpKey(key string, _ tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	maxScroll := len(m.help.lines) - (m.height - 6) // 6 lines for header, divider, footer
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
+	maxScroll := max(
+		// 6 lines for header, divider, footer
+		len(m.help.lines)-(m.height-6), 0)
 
 	switch key {
 	case "j", "down", "ctrl+d":
@@ -124,10 +123,7 @@ func (m model) helpView() string {
 	contentHeight := helpViewMaxLines
 
 	// Slice the visible portion of help.lines based on scroll offset.
-	endLine := m.help.offset + contentHeight
-	if endLine > len(m.help.lines) {
-		endLine = len(m.help.lines)
-	}
+	endLine := min(m.help.offset+contentHeight, len(m.help.lines))
 
 	visibleLines := m.help.lines[m.help.offset:endLine]
 	for _, line := range visibleLines {

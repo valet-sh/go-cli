@@ -197,8 +197,8 @@ func commandUse(meta playbookMeta) string {
 	// Strip common prefixes: "valet.sh ", "valet ", "./"
 	use := meta.usage
 	for _, prefix := range []string{"valet.sh ", "valet ", "./"} {
-		if strings.HasPrefix(use, prefix) {
-			use = strings.TrimPrefix(use, prefix)
+		if after, ok := strings.CutPrefix(use, prefix); ok {
+			use = after
 			break
 		}
 	}

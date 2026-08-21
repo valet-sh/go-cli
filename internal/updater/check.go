@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -251,12 +252,7 @@ func IsHelpOrVersionCall(args []string) bool {
 // directly — the periodic check should not run in this case since self-upgrade
 // is already the update mechanism.
 func IsSelfUpgradeCall(args []string) bool {
-	for _, a := range args[1:] {
-		if a == "self-upgrade" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(args[1:], "self-upgrade")
 }
 
 // printCliUpdatePrompt displays the CLI update notification.

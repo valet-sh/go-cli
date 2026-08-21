@@ -153,13 +153,13 @@ func formatWarningLines(taskName string, r ansibleHostResult) []string {
 	lines = append(lines, "WARNING ["+taskName+"]")
 	if stderr != "" {
 		lines = append(lines, "  stderr:")
-		for _, l := range strings.Split(stderr, "\n") {
+		for l := range strings.SplitSeq(stderr, "\n") {
 			lines = append(lines, "    "+l)
 		}
 	}
 	if stdout != "" {
 		lines = append(lines, "  stdout:")
-		for _, l := range strings.Split(stdout, "\n") {
+		for l := range strings.SplitSeq(stdout, "\n") {
 			lines = append(lines, "    "+l)
 		}
 	}
@@ -183,13 +183,13 @@ func formatFailureLines(taskName string, r ansibleHostResult) []string {
 	}
 	if stderr := strings.TrimSpace(r.Stderr); stderr != "" {
 		lines = append(lines, "  stderr:")
-		for _, l := range strings.Split(stderr, "\n") {
+		for l := range strings.SplitSeq(stderr, "\n") {
 			lines = append(lines, "    "+l)
 		}
 	}
 	if stdout := strings.TrimSpace(r.Stdout); stdout != "" {
 		lines = append(lines, "  stdout:")
-		for _, l := range strings.Split(stdout, "\n") {
+		for l := range strings.SplitSeq(stdout, "\n") {
 			lines = append(lines, "    "+l)
 		}
 	}
@@ -251,8 +251,8 @@ func shortTaskName(taskName string) string {
 	}
 
 	// No pipe — try to strip the role prefix (e.g., "role : task" → "task")
-	if i := strings.Index(taskName, " : "); i >= 0 {
-		return strings.TrimSpace(taskName[i+3:])
+	if _, after, ok := strings.Cut(taskName, " : "); ok {
+		return strings.TrimSpace(after)
 	}
 
 	// No role prefix (e.g., "Gathering Facts" or "set variables")

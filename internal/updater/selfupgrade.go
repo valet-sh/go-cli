@@ -220,9 +220,9 @@ func osCodename() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not read /etc/os-release: %w", err)
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "VERSION_CODENAME=") {
-			return strings.Trim(strings.TrimPrefix(line, "VERSION_CODENAME="), `"`), nil
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if after, ok := strings.CutPrefix(line, "VERSION_CODENAME="); ok {
+			return strings.Trim(after, `"`), nil
 		}
 	}
 	return "", fmt.Errorf("VERSION_CODENAME not found in /etc/os-release")

@@ -488,7 +488,7 @@ func TestHelpViewScrollDownWithJ(t *testing.T) {
 	}
 
 	// Manually populate help.lines with many lines to allow scrolling.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		rm.help.lines = append(rm.help.lines, "Line "+fmt.Sprintf("%d", i))
 	}
 
@@ -517,7 +517,7 @@ func TestHelpViewScrollUpWithK(t *testing.T) {
 	}
 
 	// Manually populate help.lines with many lines to allow scrolling.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		rm.help.lines = append(rm.help.lines, "Line "+fmt.Sprintf("%d", i))
 	}
 

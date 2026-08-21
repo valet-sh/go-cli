@@ -160,10 +160,7 @@ func (b InlineBox) View() string {
 // scrollDocs adjusts the documentation scroll position by delta lines,
 // clamped to valid bounds.
 func (b *InlineBox) scrollDocs(delta int) {
-	maxOffset := len(b.docsLines) - inlineBoxMaxDocLines
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
+	maxOffset := max(len(b.docsLines)-inlineBoxMaxDocLines, 0)
 	b.docsOffset += delta
 	if b.docsOffset < 0 {
 		b.docsOffset = 0
@@ -178,9 +175,6 @@ func (b InlineBox) visibleDocLines() []string {
 	if len(b.docsLines) == 0 {
 		return nil
 	}
-	end := b.docsOffset + inlineBoxMaxDocLines
-	if end > len(b.docsLines) {
-		end = len(b.docsLines)
-	}
+	end := min(b.docsOffset+inlineBoxMaxDocLines, len(b.docsLines))
 	return b.docsLines[b.docsOffset:end]
 }

@@ -261,10 +261,7 @@ func (e ExecModel) cliView() string {
 
 	cmdLabel := styles.Header.Render("▶ valet.sh " + e.command)
 	versionLabel := styles.Version.Render("v" + e.version)
-	versionPadding := e.width - lipgloss.Width(cmdLabel) - lipgloss.Width(versionLabel) - 2
-	if versionPadding < 1 {
-		versionPadding = 1
-	}
+	versionPadding := max(e.width-lipgloss.Width(cmdLabel)-lipgloss.Width(versionLabel)-2, 1)
 	_, _ = fmt.Fprintln(&output, cmdLabel+strings.Repeat(" ", versionPadding)+versionLabel)
 
 	_, _ = fmt.Fprintln(&output, e.progressBarView())

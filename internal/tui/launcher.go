@@ -448,10 +448,7 @@ func (m model) headerView() string {
 
 	leftLen := lipgloss.Width(title) + lipgloss.Width(titleSuffix)
 	rightLen := lipgloss.Width(right)
-	versionPadding := m.width - leftLen - rightLen - 1
-	if versionPadding < 1 {
-		versionPadding = 1
-	}
+	versionPadding := max(m.width-leftLen-rightLen-1, 1)
 
 	return title + titleSuffix + strings.Repeat(" ", versionPadding) + right
 }
