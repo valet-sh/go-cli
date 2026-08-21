@@ -136,7 +136,14 @@ Configuration is driven by a .valet-sh.yml file in each project directory.`,
 	commands.SetHelpFormatter(cmd)
 
 	// Print version in the same style as the rest of the tool.
-	cmd.SetVersionTemplate(fmt.Sprintf("valet.sh %s - CLI %s\n", string(updater.GetCurrentReleaseChannel()), Version))
+	channel := updater.GetCurrentReleaseChannel()
+	cmd.SetVersionTemplate(fmt.Sprintf(
+		"valet.sh %s | Channel: %s | CLI: %s | Runtime: %s\n",
+		updater.GetPlaybookVersion(platform.RepoDir(), channel),
+		channel,
+		Version,
+		updater.GetRuntimeVersion(),
+	))
 
 	// Auto-discover subcommands from playbooks/*.yml header annotations.
 	// Each playbook with a @command annotation becomes a cobra command.

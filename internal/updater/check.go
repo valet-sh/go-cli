@@ -122,27 +122,22 @@ func checkAnsibleUpdate(repoDir string) bool {
 		return false
 	}
 
-	cmd := exec.Command("git", "-C", repoDir, "fetch", "--quiet", "origin", PlaybookBranch)
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-
-	localHeadCmd := exec.Command("git", "-C", repoDir, "rev-parse", "HEAD")
-	localHead, err := localHeadCmd.Output()
+	ref, isBranch, err := resolvePlaybookRef(repoDir, PlaybookBranch, false)
 	if err != nil {
 		return false
 	}
 
-	remoteHeadCmd := exec.Command("git", "-C", repoDir, "rev-parse", "origin/"+PlaybookBranch)
-	remoteHead, err := remoteHeadCmd.Output()
+	targetCommit, err := gitCommitOf(repoDir, ref, isBranch)
 	if err != nil {
 		return false
 	}
 
-	localHeadStr := strings.TrimSpace(string(localHead))
-	remoteHeadStr := strings.TrimSpace(string(remoteHead))
+	localHead, err := gitCommitOf(repoDir, "HEAD", false)
+	if err != nil {
+		return false
+	}
 
-	return localHeadStr != remoteHeadStr
+	return localHead != targetCommit
 }
 
 // promptSelfUpgrade calls valet self-upgrade and returns true if the CLI was updated.

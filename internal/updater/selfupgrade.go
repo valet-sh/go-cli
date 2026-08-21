@@ -18,13 +18,16 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +35,9 @@ import (
 	"github.com/valet-sh/cli/internal/helper"
 	"github.com/valet-sh/cli/internal/style"
 )
+
+var errNoRelease = errors.New("no tagged release available for this channel")
+var semverTagRe = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$`)
 
 // SelfUpgrade checks for updates to both the CLI binary and the Ansible
 // playbook repo, and applies them if newer versions are available.
@@ -242,64 +248,75 @@ func extractTar(tarPath, destDir string) error {
 	return nil
 }
 
-func EnsurePlaybooks(repoDir, repoURL, branch string) (bool, error) {
+func EnsurePlaybooks(repoDir, repoURL, channel string) (bool, error) {
 	gitDir := filepath.Join(repoDir, ".git")
 	if _, err := os.Stat(gitDir); err != nil {
-		return clonePlaybooks(repoDir, repoURL, branch)
+		return clonePlaybooks(repoDir, repoURL, channel)
 	}
+	return updatePlaybooks(repoDir, channel)
+}
 
+func updatePlaybooks(repoDir, channel string) (bool, error) {
 	fmt.Printf("%s Checking for Ansible playbook updates...\n", style.Blue(os.Stdout, "▶"))
-	cmd := exec.Command("git", "-C", repoDir, "fetch", "--quiet", "origin", branch)
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("%s Could not fetch Ansible playbook updates\n", style.Blue(os.Stdout, "ℹ"))
+
+	ref, isBranch, err := resolvePlaybookRef(repoDir, channel, true)
+	if errors.Is(err, errNoRelease) {
+		fmt.Println(style.Info(os.Stdout, "Skipping playbook update."))
+		return false, nil
+	}
+	if err != nil {
+		fmt.Printf("%s Could not check Ansible playbook updates: %v\n", style.Blue(os.Stdout, "ℹ"), err)
 		return false, nil
 	}
 
-	localHeadCmd := exec.Command("git", "-C", repoDir, "rev-parse", "HEAD")
-	localHead, err := localHeadCmd.Output()
+	targetCommit, err := gitCommitOf(repoDir, ref, isBranch)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve %s: %w", ref, err)
+	}
+
+	localHead, err := gitCommitOf(repoDir, "HEAD", false)
 	if err != nil {
 		return false, fmt.Errorf("failed to get local HEAD: %w", err)
 	}
 
-	remoteHeadCmd := exec.Command("git", "-C", repoDir, "rev-parse", "origin/"+branch)
-	remoteHead, err := remoteHeadCmd.Output()
-	if err != nil {
-		return false, fmt.Errorf("failed to get remote HEAD: %w", err)
-	}
-
-	localHeadStr := strings.TrimSpace(string(localHead))
-	remoteHeadStr := strings.TrimSpace(string(remoteHead))
-
-	if localHeadStr == remoteHeadStr {
-		fmt.Printf("%s Ansible playbooks are up to date\n", style.Green(os.Stdout, "✓"))
+	if localHead == targetCommit {
+		fmt.Printf("%s Ansible playbooks are up to date (%s)\n", style.Green(os.Stdout, "✓"), ref)
 		return false, nil
 	}
 
-	fmt.Println("  Pulling latest Ansible playbooks...")
-	pullCmd := exec.Command("git", "-C", repoDir, "pull", "--quiet", "origin", branch)
-	if err := pullCmd.Run(); err != nil {
-		return false, fmt.Errorf("failed to pull Ansible playbooks: %w", err)
+	fmt.Printf("  Checking out %s...\n", ref)
+	if err := checkoutPlaybookRef(repoDir, ref, isBranch); err != nil {
+		return false, fmt.Errorf("failed to checkout %s: %w", ref, err)
 	}
 
-	fmt.Printf("%s Ansible playbooks updated\n", style.Green(os.Stdout, "✓"))
+	fmt.Printf("%s Ansible playbooks updated to %s\n", style.Green(os.Stdout, "✓"), ref)
 	return true, nil
 }
 
-func clonePlaybooks(repoDir, repoURL, branch string) (bool, error) {
-	fmt.Printf("%s Cloning Ansible playbooks (%s@%s)...\n", style.Blue(os.Stdout, "▶"), repoURL, branch)
+func clonePlaybooks(repoDir, repoURL, channel string) (bool, error) {
+	fmt.Printf("%s Cloning Ansible playbooks (%s)...\n", style.Blue(os.Stdout, "▶"), repoURL)
 
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", repoURL)
-	if err := gitClonePlaybooks(cloneURL, branch, repoDir); err != nil {
+	if err := gitClonePlaybooks(cloneURL, repoDir); err != nil {
 		return false, fmt.Errorf("failed to clone playbooks: %w", err)
 	}
 
-	fmt.Printf("%s Ansible playbooks cloned\n", style.Green(os.Stdout, "✓"))
+	ref, isBranch, err := resolvePlaybookRef(repoDir, channel, true)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve %s channel: %w", channel, err)
+	}
+
+	if err := checkoutPlaybookRef(repoDir, ref, isBranch); err != nil {
+		return false, fmt.Errorf("failed to checkout %s: %w", ref, err)
+	}
+
+	fmt.Printf("%s Ansible playbooks cloned (%s)\n", style.Green(os.Stdout, "✓"), ref)
 	return true, nil
 }
 
-func gitClonePlaybooks(cloneURL, branch, repoDir string) error {
+func gitClonePlaybooks(cloneURL, repoDir string) error {
 	clone := func() error {
-		cmd := exec.Command("git", "clone", "--quiet", "--branch", branch, cloneURL, repoDir)
+		cmd := exec.Command("git", "clone", "--quiet", cloneURL, repoDir)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
@@ -316,6 +333,82 @@ func gitClonePlaybooks(cloneURL, branch, repoDir string) error {
 	}
 
 	return clone()
+}
+
+func resolvePlaybookRef(repoDir, channel string, interactive bool) (ref string, isBranch bool, err error) {
+	if err := exec.Command("git", "-C", repoDir, "fetch", "--quiet", "--tags", "origin").Run(); err != nil {
+		return "", false, fmt.Errorf("failed to fetch origin: %w", err)
+	}
+
+	if channel == constants.VshNextVersion {
+		return channel, true, nil
+	}
+
+	majorVersion, ok := strings.CutSuffix(channel, ".x")
+	if !ok {
+		return "", false, fmt.Errorf("invalid release channel: %q", channel)
+	}
+
+	out, err := exec.Command("git", "-C", repoDir, "tag").Output()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to list tags: %w", err)
+	}
+
+	if tag := highestSemverTag(strings.Fields(string(out)), majorVersion); tag != "" {
+		return tag, false, nil
+	}
+
+	if !interactive {
+		return "", false, errNoRelease
+	}
+
+	fmt.Printf("%s No release found yet for the %s channel.\n", style.Blue(os.Stdout, "ℹ"), channel)
+	fmt.Printf("  Switch to the %s branch for testing without a release? [y/N] ", channel)
+	if !askYesNo() {
+		return "", false, errNoRelease
+	}
+	return channel, true, nil
+}
+
+func highestSemverTag(tags []string, majorVersion string) string {
+	best := ""
+	bestMinor, bestPatch := -1, -1
+	for _, tag := range tags {
+		m := semverTagRe.FindStringSubmatch(tag)
+		if m == nil || m[1] != majorVersion {
+			continue
+		}
+		minor, _ := strconv.Atoi(m[2])
+		patch, _ := strconv.Atoi(m[3])
+		if best == "" || minor > bestMinor || (minor == bestMinor && patch > bestPatch) {
+			best, bestMinor, bestPatch = tag, minor, patch
+		}
+	}
+	return best
+}
+
+func gitCommitOf(repoDir, ref string, isBranch bool) (string, error) {
+	target := ref
+	if isBranch {
+		target = "origin/" + ref
+	}
+	out, err := exec.Command("git", "-C", repoDir, "rev-parse", target+"^{commit}").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func checkoutPlaybookRef(repoDir, ref string, isBranch bool) error {
+	var cmd *exec.Cmd
+	if isBranch {
+		cmd = exec.Command("git", "-C", repoDir, "checkout", "--quiet", "-B", ref, "origin/"+ref)
+	} else {
+		cmd = exec.Command("git", "-C", repoDir, "checkout", "--quiet", ref)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // downloadAndVerifyBinary downloads the binary and checksums.txt from GitHub
@@ -472,24 +565,21 @@ func verifySha256(filePath, checksumsPath, expectedFileName string) error {
 	return fmt.Errorf("checksum for %s not found in checksums.txt", expectedFileName)
 }
 
-func checkoutBranch(repoDir, branch string) error {
+func checkoutChannel(repoDir, channel string) error {
 	if out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain").Output(); err != nil {
 		return fmt.Errorf("failed to check working tree: %w", err)
 	} else if strings.TrimSpace(string(out)) != "" {
-		return fmt.Errorf("refusing to switch branches: uncommitted changes in %s", repoDir)
+		return fmt.Errorf("refusing to switch channels: uncommitted changes in %s", repoDir)
 	}
 
-	fmt.Printf("  Fetching %s...\n", branch)
-	if err := exec.Command("git", "-C", repoDir, "fetch", "--quiet", "origin", branch).Run(); err != nil {
-		return fmt.Errorf("failed to fetch origin/%s: %w", branch, err)
+	ref, isBranch, err := resolvePlaybookRef(repoDir, channel, true)
+	if err != nil {
+		return err
 	}
 
-	fmt.Printf("  Checking out %s...\n", branch)
-	cmd := exec.Command("git", "-C", repoDir, "checkout", "-B", branch, "origin/"+branch)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to checkout %s: %w", branch, err)
+	fmt.Printf("  Checking out %s...\n", ref)
+	if err := checkoutPlaybookRef(repoDir, ref, isBranch); err != nil {
+		return fmt.Errorf("failed to checkout %s: %w", ref, err)
 	}
 	return nil
 }

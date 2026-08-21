@@ -15,6 +15,7 @@
 package updater
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -22,18 +23,13 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/valet-sh/cli/constants"
 	"github.com/valet-sh/cli/internal/helper"
+	"github.com/valet-sh/cli/internal/style"
 )
 
 type channelConfig struct {
 	label string
 	value string
 }
-
-// var availableChannels = []channelConfig{
-// 	{label: "2.x (stable)", value: "2.x"},
-// 	{label: "3.x (preview)", value: "3.x"},
-// 	{label: "next (development)", value: "next"},
-// }
 
 var availableChannels = []channelConfig{
 	{label: constants.VshStableVersion + " (Stable)", value: constants.VshStableVersion},
@@ -88,7 +84,11 @@ func setChannel(channel, repoDir string) error {
 
 	fmt.Printf("Switching to %s channel...\n", channel)
 
-	if err := checkoutBranch(repoDir, channel); err != nil {
+	if err := checkoutChannel(repoDir, channel); err != nil {
+		if errors.Is(err, errNoRelease) {
+			fmt.Println(style.Info(os.Stdout, "Channel switch cancelled."))
+			return nil
+		}
 		return fmt.Errorf("failed to switch to %s channel: %w", channel, err)
 	}
 
