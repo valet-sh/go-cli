@@ -336,7 +336,7 @@ func gitClonePlaybooks(cloneURL, repoDir string) error {
 }
 
 func resolvePlaybookRef(repoDir, channel string, interactive bool) (ref string, isBranch bool, err error) {
-	if err := exec.Command("git", "-C", repoDir, "fetch", "--quiet", "--tags", "origin").Run(); err != nil {
+	if err = exec.Command("git", "-C", repoDir, "fetch", "--quiet", "--tags", "origin").Run(); err != nil {
 		return "", false, fmt.Errorf("failed to fetch origin: %w", err)
 	}
 
@@ -375,7 +375,7 @@ func highestSemverTag(tags []string, majorVersion string) string {
 	bestMinor, bestPatch := -1, -1
 	for _, tag := range tags {
 		m := semverTagRe.FindStringSubmatch(tag)
-		if m == nil || m[1] != majorVersion {
+		if len(m) < 4 || m[1] != majorVersion {
 			continue
 		}
 		minor, _ := strconv.Atoi(m[2])
