@@ -229,21 +229,16 @@ func osCodename() (string, error) {
 }
 
 // extractTar extracts a .tar.gz archive into destDir.
-// Retries with sudo when the initial attempt fails (permission-protected paths).
 func extractTar(tarPath, destDir string) error {
+	if err := helper.EnsureOwnedDir(destDir, constants.VshRootPath); err != nil {
+		return fmt.Errorf("failed to reclaim ownership of %s: %w", destDir, err)
+	}
+
 	cmd := exec.Command("tar", "-C", destDir, "-xzf", tarPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err == nil {
-		return nil
-	}
-	fmt.Println("  Requesting sudo to extract runtime...")
-	cmd = exec.Command("sudo", "tar", "-C", destDir, "-xzf", tarPath)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to extract runtime (sudo): %w", err)
+		return fmt.Errorf("failed to extract runtime: %w", err)
 	}
 	return nil
 }
