@@ -187,10 +187,13 @@ func (e ExecModel) Update(msg tea.Msg) (ExecModel, tea.Cmd) {
 			e.cleanup()
 		}
 		// Quit in CLI success mode only when stdout is fully drained too.
-		if e.err == nil && e.stdoutEOF {
-			return e, tea.Quit
+		if e.err == nil {
+			if e.stdoutEOF {
+				return e, tea.Quit
+			}
+			return e, nil
 		}
-		return e, nil
+		return e, resyncTerminalCmd()
 
 	case tea.KeyPressMsg:
 		return e.handleKey(msg)
@@ -341,6 +344,17 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(spinnerTickInterval, func(t time.Time) tea.Msg {
 		return execTickMsg(t)
 	})
+}
+
+type resyncExecCommand struct{}
+
+func (resyncExecCommand) Run() error          { return nil }
+func (resyncExecCommand) SetStdin(io.Reader)  {}
+func (resyncExecCommand) SetStdout(io.Writer) {}
+func (resyncExecCommand) SetStderr(io.Writer) {}
+
+func resyncTerminalCmd() tea.Cmd {
+	return tea.Exec(resyncExecCommand{}, nil)
 }
 
 func waitForProcess(cmd *exec.Cmd) tea.Cmd {
