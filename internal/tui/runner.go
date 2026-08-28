@@ -162,7 +162,7 @@ func runExecPanel(command, version string, proc *exec.Cmd, ansibleOut io.Reader,
 	fm, hasFinal := final.(standaloneExecModel)
 
 	if hasFinal && fm.execPanel.LogViewRequested() {
-		printLogView(fm.execPanel.LogLines())
+		printLogView(fm.execPanel.FullLogLines())
 	}
 
 	if outputBuf.Len() > 0 {
@@ -171,9 +171,7 @@ func runExecPanel(command, version string, proc *exec.Cmd, ansibleOut io.Reader,
 	}
 
 	if hasFinal {
-		// Write accumulated log lines to debug.log so the file has human-readable
-		// content even when the JSONL callback is active (replacing the Python handler).
-		writeDebugLog(platform.LogFile(), fm.execPanel.LogLines())
+		writeDebugLog(platform.LogFile(), fm.execPanel.FullLogLines())
 
 		if fm.execPanel.Err() != nil {
 			fmt.Fprintf(os.Stderr, "  log: %s\n", platform.LogFile())

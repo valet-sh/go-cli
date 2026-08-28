@@ -48,7 +48,8 @@ type ansibleEventMsg struct {
 	// taskName, when non-empty, updates the spinner's current task display.
 	taskName string
 	// logLines are formatted lines to append to the live log viewport.
-	logLines []string
+	logLines  []string
+	fullLines []string
 	// eof is true when the stdout pipe is closed — no more events will arrive.
 	eof bool
 }
@@ -83,6 +84,8 @@ type ExecModel struct {
 	// logLines accumulates all formatted log lines produced from JSON events.
 	// Printed to stdout after BubbleTea exits if the user requested log view.
 	logLines []string
+
+	fullLogLines []string
 
 	// tasksDone is the number of Ansible tasks completed so far, counted
 	// by detecting "TASK [" lines in the accumulated log output.
@@ -170,6 +173,9 @@ func (e ExecModel) Update(msg tea.Msg) (ExecModel, tea.Cmd) {
 		}
 		if len(msg.logLines) > 0 {
 			e.appendLines(msg.logLines)
+		}
+		if len(msg.fullLines) > 0 {
+			e.fullLogLines = append(e.fullLogLines, msg.fullLines...)
 		}
 		return e, readTaskCmd(e.ansibleOut, e.output)
 
@@ -327,6 +333,8 @@ func (e ExecModel) LogViewRequested() bool { return e.logViewRequested }
 // LogLines returns the accumulated formatted log lines.
 // Typically used after BubbleTea exits to display the log via printLogView().
 func (e ExecModel) LogLines() []string { return e.logLines }
+
+func (e ExecModel) FullLogLines() []string { return e.fullLogLines }
 
 // appendLines appends multiple lines to the logLines accumulator,
 // counting TASK-prefix lines to advance the task counter.

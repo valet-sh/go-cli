@@ -276,7 +276,7 @@ func TestParseJSONEvent(t *testing.T) {
 		{
 			name:     "runner ok without vsh_stdout or warnings",
 			line:     `{"_event":"v2_runner_on_ok","task":{"name":"install package"},"hosts":{"localhost":{"changed":false}},"_timestamp":"2025-01-01T00:00:00Z"}`,
-			wantType: "nil",
+			wantType: "fullonly",
 		},
 		{
 			name:            "runner ok with stderr warning",
@@ -340,12 +340,22 @@ func TestParseJSONEvent(t *testing.T) {
 					t.Errorf("expected at least %d logLines, got %d", tc.wantLogLines, len(ev.logLines))
 				}
 			case "output":
-				// vsh_stdout is written directly to the buffer, not returned as a msg.
-				if msg != nil {
-					t.Errorf("vsh_stdout should not produce a msg (got %T), only write to buffer", msg)
+				if ev, ok := msg.(ansibleEventMsg); ok && len(ev.logLines) != 0 {
+					t.Errorf("expected no concise logLines for vsh_stdout event, got %v", ev.logLines)
 				}
 				if buf.String() != tc.wantVal {
 					t.Errorf("output buffer: got %q, want %q", buf.String(), tc.wantVal)
+				}
+			case "fullonly":
+				ev, ok := msg.(ansibleEventMsg)
+				if !ok {
+					t.Fatalf("expected ansibleEventMsg (full-only), got %T", msg)
+				}
+				if len(ev.logLines) != 0 {
+					t.Errorf("expected no concise logLines, got %v", ev.logLines)
+				}
+				if len(ev.fullLines) == 0 {
+					t.Errorf("expected fullLines to be populated")
 				}
 			case "loglines":
 				ev, ok := msg.(ansibleEventMsg)
@@ -397,8 +407,6 @@ func TestReadTaskCmdParsesJSONTaskStart(t *testing.T) {
 }
 
 func TestReadTaskCmdWritesVshStdoutToBuffer(t *testing.T) {
-	// vsh_stdout content must be written directly to the shared buffer,
-	// not returned as a BubbleTea message (to avoid the tea.Quit race).
 	line := `{"_event":"v2_runner_on_ok","task":{"name":"list services"},"hosts":{"localhost":{"vsh_stdout":"table content"}},"_timestamp":"t"}` + "\n"
 	taskLine := `{"_event":"v2_playbook_on_task_start","task":{"name":"done"},"_timestamp":"t"}` + "\n"
 
@@ -410,20 +418,25 @@ func TestReadTaskCmdWritesVshStdoutToBuffer(t *testing.T) {
 	}()
 
 	var buf bytes.Buffer
-	// First call: vsh_stdout is written to buf, readTaskCmd keeps looping until task name.
 	msg := readTaskCmd(pr, &buf)()
-
-	// The vsh_stdout line should NOT produce a message — readTaskCmd continues.
-	// The task name line produces the ansibleEventMsg.
 	ev, ok := msg.(ansibleEventMsg)
 	if !ok {
 		t.Fatalf("expected ansibleEventMsg after vsh_stdout, got %T", msg)
 	}
-	if ev.taskName != "done" {
-		t.Errorf("expected task name %q, got %q", "done", ev.taskName)
+	if len(ev.logLines) != 0 {
+		t.Errorf("expected no concise logLines for vsh_stdout event, got %v", ev.logLines)
 	}
 	if buf.String() != "table content" {
 		t.Errorf("expected buffer %q, got %q", "table content", buf.String())
+	}
+
+	msg = readTaskCmd(pr, &buf)()
+	ev, ok = msg.(ansibleEventMsg)
+	if !ok {
+		t.Fatalf("expected ansibleEventMsg for task start, got %T", msg)
+	}
+	if ev.taskName != "done" {
+		t.Errorf("expected task name %q, got %q", "done", ev.taskName)
 	}
 }
 
