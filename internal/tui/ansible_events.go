@@ -113,22 +113,30 @@ func parseJSONEvent(line []byte, out *bytes.Buffer) tea.Msg {
 
 	case "v2_runner_on_failed":
 		var logLines []string
+		var errMsg string
 		for _, result := range ev.Hosts {
 			logLines = append(logLines, formatFailureLines(ev.Task.Name, result)...)
+			if errMsg == "" && result.Msg != "" {
+				errMsg = result.Msg
+			}
 		}
 		if len(logLines) > 0 || len(fullLines) > 0 {
-			return ansibleEventMsg{logLines: logLines, fullLines: fullLines}
+			return ansibleEventMsg{logLines: logLines, fullLines: fullLines, errMsg: errMsg}
 		}
 		return nil
 
 	case "v2_runner_on_unreachable":
 		var logLines []string
+		var errMsg string
 		for _, result := range ev.Hosts {
 			logLines = append(logLines, "UNREACHABLE ["+ev.Task.Name+"]")
 			logLines = appendMsgLines(logLines, result.Msg)
+			if errMsg == "" && result.Msg != "" {
+				errMsg = result.Msg
+			}
 		}
 		if len(logLines) > 0 || len(fullLines) > 0 {
-			return ansibleEventMsg{logLines: logLines, fullLines: fullLines}
+			return ansibleEventMsg{logLines: logLines, fullLines: fullLines, errMsg: errMsg}
 		}
 		return nil
 

@@ -50,6 +50,7 @@ type ansibleEventMsg struct {
 	// logLines are formatted lines to append to the live log viewport.
 	logLines  []string
 	fullLines []string
+	errMsg    string
 	// eof is true when the stdout pipe is closed — no more events will arrive.
 	eof bool
 }
@@ -105,6 +106,8 @@ type ExecModel struct {
 
 	// err is non-nil if ansible exited with a non-zero status.
 	err error
+
+	errMsg string
 
 	// awaitingLogPrompt is true when we have shown the "View full log? [Y/n]"
 	// prompt and are waiting for the user's answer.
@@ -170,6 +173,9 @@ func (e ExecModel) Update(msg tea.Msg) (ExecModel, tea.Cmd) {
 		}
 		if msg.taskName != "" {
 			e.currentTask = msg.taskName
+		}
+		if msg.errMsg != "" {
+			e.errMsg = msg.errMsg
 		}
 		if len(msg.logLines) > 0 {
 			e.appendLines(msg.logLines)
@@ -298,8 +304,15 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 func (e ExecModel) progressBarView() string {
 	if e.done {
 		if e.err != nil {
+			msg := e.errMsg
+			if msg == "" {
+				msg = e.err.Error()
+			}
+			if i := strings.IndexByte(msg, '\n'); i >= 0 {
+				msg = msg[:i]
+			}
 			return lipgloss.NewStyle().Foreground(colourRed).Render(
-				"✘  " + fmt.Sprintf("%d tasks", e.tasksDone),
+				"✘  " + fmt.Sprintf("%d tasks - %s", e.tasksDone, msg),
 			)
 		}
 		return styles.ItemSelected.Render(
