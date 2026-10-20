@@ -123,6 +123,21 @@ func Discover(repoDir string) ([]*cobra.Command, error) {
 	return topLevel, nil
 }
 
+func ExpandColonCommand(root *cobra.Command, args []string) []string {
+	if len(args) == 0 || !strings.Contains(args[0], ":") {
+		return args
+	}
+
+	parts := strings.SplitN(args[0], ":", 2)
+	expanded := append([]string{parts[0], parts[1]}, args[1:]...)
+
+	cmd, _, err := root.Find(expanded)
+	if err != nil || cmd.Annotations["playbook"] != args[0] {
+		return args
+	}
+	return expanded
+}
+
 // buildCommand creates a *cobra.Command from the parsed playbookMeta.
 // The command's RunE calls ansible.Run with the playbook name extracted
 // from the @command annotation (colons preserved, e.g. "project:env").

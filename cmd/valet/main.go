@@ -79,7 +79,8 @@ func main() {
 
 	// Arguments present — show the execution panel on TTY, fall back to
 	// direct cobra/ansible for non-TTY (CI, pipes).
-	if err := tui.RunWithPanel(root, os.Args[1:], Version); err != nil {
+	args := commands.ExpandColonCommand(root, os.Args[1:])
+	if err := tui.RunWithPanel(root, args, Version); err != nil {
 		fmt.Fprintln(os.Stderr, commands.ErrorPrefix(err.Error()))
 		os.Exit(1)
 	}

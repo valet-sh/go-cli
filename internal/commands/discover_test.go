@@ -17,7 +17,10 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // writePlaybook writes content to a temp file and returns its path.
@@ -306,5 +309,60 @@ func TestDiscover_GroupsSubcommands(t *testing.T) {
 	}
 	if len(parent.Commands()) != 2 {
 		t.Errorf("expected 2 subcommands, got %d", len(parent.Commands()))
+	}
+}
+
+func TestExpandColonCommand(t *testing.T) {
+	dir := t.TempDir()
+	pbDir := filepath.Join(dir, "playbooks")
+	if err := os.MkdirAll(pbDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, content := range map[string]string{
+		"project:cc.yml": `#
+# @command:     "project:cc"
+# @description: "clear cache"
+---
+`,
+		"service.yml": `#
+# @command:     "service"
+# @description: "manage services"
+---
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(pbDir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cmds, err := Discover(dir)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	root := &cobra.Command{Use: "valet.sh", Args: cobra.ArbitraryArgs, RunE: func(*cobra.Command, []string) error { return nil }}
+	root.AddCommand(cmds...)
+
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{"colon form", []string{"project:cc"}, []string{"project", "cc"}},
+		{"colon form with args", []string{"project:cc", "-v", "foo"}, []string{"project", "cc", "-v", "foo"}},
+		{"space form unchanged", []string{"project", "cc"}, []string{"project", "cc"}},
+		{"top-level unchanged", []string{"service", "start"}, []string{"service", "start"}},
+		{"unknown colon command unchanged", []string{"project:nope"}, []string{"project:nope"}},
+		{"colon in later arg unchanged", []string{"service", "a:b"}, []string{"service", "a:b"}},
+		{"no args", []string{}, []string{}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ExpandColonCommand(root, tc.args)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("ExpandColonCommand(%q) = %q, want %q", tc.args, got, tc.want)
+			}
+		})
 	}
 }
