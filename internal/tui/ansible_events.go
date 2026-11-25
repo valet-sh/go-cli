@@ -25,17 +25,123 @@ import (
 
 // ansibleHostResult holds the per-host fields we extract from jsonl events.
 type ansibleHostResult struct {
-	VshStdout    string          `json:"vsh_stdout"`
-	Msg          string          `json:"msg"`
-	Stderr       string          `json:"stderr"`
-	Stdout       string          `json:"stdout"`
-	ModuleStderr string          `json:"module_stderr"`
-	ModuleStdout string          `json:"module_stdout"`
-	Changed      bool            `json:"changed"`
-	Failed       bool            `json:"failed"`
-	Unreachable  bool            `json:"unreachable"`
-	RC           int             `json:"rc"`
-	Cmd          json.RawMessage `json:"cmd"`
+	VshStdout    string              `json:"vsh_stdout"`
+	Msg          string              `json:"msg"`
+	Stderr       string              `json:"stderr"`
+	Stdout       string              `json:"stdout"`
+	ModuleStderr string              `json:"module_stderr"`
+	ModuleStdout string              `json:"module_stdout"`
+	Changed      bool                `json:"changed"`
+	Failed       bool                `json:"failed"`
+	Unreachable  bool                `json:"unreachable"`
+	RC           int                 `json:"rc"`
+	Cmd          json.RawMessage     `json:"cmd"`
+	Item         json.RawMessage     `json:"item"`
+	Results      []ansibleHostResult `json:"results"`
+	LoopVar      string              `json:"ansible_loop_var"`
+}
+
+func (r *ansibleHostResult) UnmarshalJSON(data []byte) error {
+	type plain ansibleHostResult
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	if len(p.Item) == 0 && p.LoopVar != "" {
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err == nil {
+			p.Item = raw[p.LoopVar]
+		}
+	}
+	*r = ansibleHostResult(p)
+	return nil
+}
+
+func failedResults(r *ansibleHostResult) []*ansibleHostResult {
+	if len(r.Results) == 0 {
+		return []*ansibleHostResult{r}
+	}
+	var out []*ansibleHostResult
+	for i := range r.Results {
+		if r.Results[i].Failed || r.Results[i].Unreachable {
+			out = append(out, &r.Results[i])
+		}
+	}
+	if len(out) == 0 {
+		return []*ansibleHostResult{r}
+	}
+	return out
+}
+
+func errorSummary(r *ansibleHostResult) string {
+	msg := firstLine(r.Msg)
+	cmd := formatCmd(r.Cmd)
+
+	if cmd != "" && (msg == "" || msg == "non-zero return code") {
+		if l := lastLine(r.Stderr); l != "" {
+			msg = l
+		} else if l := lastLine(r.Stdout); l != "" {
+			msg = l
+		}
+	}
+	if msg == "" {
+		msg = firstLine(r.Stderr)
+	}
+	if msg == "" {
+		return ""
+	}
+
+	item := formatCmd(r.Item)
+	if item == "null" {
+		item = ""
+	}
+	if cmd == "" && item != "" {
+		msg += " (item: " + item + ")"
+	}
+	if r.RC != 0 {
+		msg += fmt.Sprintf(" (rc=%d)", r.RC)
+	}
+	if cmd != "" {
+		label := item
+		if label == "" {
+			label = shortCmd(cmd)
+		}
+		msg += " · " + label
+	}
+	return msg
+}
+
+func firstLine(s string) string {
+	for l := range strings.SplitSeq(s, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			return l
+		}
+	}
+	return ""
+}
+
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			return l
+		}
+	}
+	return ""
+}
+
+func shortCmd(cmd string) string {
+	fields := strings.Fields(cmd)
+	for i, f := range fields {
+		if !strings.HasPrefix(f, "/") {
+			continue
+		}
+		parts := strings.Split(strings.TrimRight(f, "/"), "/")
+		if n := len(parts); n > 2 {
+			fields[i] = strings.Join(parts[n-2:], "/")
+		}
+	}
+	return strings.Join(fields, " ")
 }
 
 // ansibleJSONEvent is the schema for ansible.posix.jsonl output lines.
@@ -114,10 +220,12 @@ func parseJSONEvent(line []byte, out *bytes.Buffer) tea.Msg {
 	case "v2_runner_on_failed":
 		var logLines []string
 		var errMsg string
-		for _, result := range ev.Hosts {
-			logLines = append(logLines, formatFailureLines(ev.Task.Name, result)...)
-			if errMsg == "" && result.Msg != "" {
-				errMsg = result.Msg
+		for _, host := range ev.Hosts {
+			for _, result := range failedResults(host) {
+				logLines = append(logLines, formatFailureLines(ev.Task.Name, result)...)
+				if errMsg == "" {
+					errMsg = errorSummary(result)
+				}
 			}
 		}
 		if len(logLines) > 0 || len(fullLines) > 0 {
@@ -128,11 +236,14 @@ func parseJSONEvent(line []byte, out *bytes.Buffer) tea.Msg {
 	case "v2_runner_on_unreachable":
 		var logLines []string
 		var errMsg string
-		for _, result := range ev.Hosts {
-			logLines = append(logLines, "UNREACHABLE ["+ev.Task.Name+"]")
-			logLines = appendMsgLines(logLines, result.Msg)
-			if errMsg == "" && result.Msg != "" {
-				errMsg = result.Msg
+		for _, host := range ev.Hosts {
+			for _, result := range failedResults(host) {
+				logLines = append(logLines, "UNREACHABLE ["+ev.Task.Name+"]")
+				logLines = appendItemLine(logLines, result)
+				logLines = appendMsgLines(logLines, result.Msg)
+				if errMsg == "" {
+					errMsg = errorSummary(result)
+				}
 			}
 		}
 		if len(logLines) > 0 || len(fullLines) > 0 {
@@ -180,7 +291,9 @@ func formatFullEventLines(ev ansibleJSONEvent) []string {
 		var lines []string
 		for host, result := range ev.Hosts {
 			lines = append(lines, "fatal: ["+host+"]: FAILED! =>")
-			lines = append(lines, formatResultFieldLines(result)...)
+			for _, r := range failedResults(result) {
+				lines = append(lines, formatResultFieldLines(r)...)
+			}
 		}
 		if ev.Task.Path != "" {
 			lines = append(lines, "Origin: "+ev.Task.Path)
@@ -191,7 +304,9 @@ func formatFullEventLines(ev ansibleJSONEvent) []string {
 		var lines []string
 		for host, result := range ev.Hosts {
 			lines = append(lines, "fatal: ["+host+"]: UNREACHABLE! =>")
-			lines = append(lines, formatResultFieldLines(result)...)
+			for _, r := range failedResults(result) {
+				lines = append(lines, formatResultFieldLines(r)...)
+			}
 		}
 		if ev.Task.Path != "" {
 			lines = append(lines, "Origin: "+ev.Task.Path)
@@ -215,6 +330,7 @@ func formatFullEventLines(ev ansibleJSONEvent) []string {
 
 func formatResultFieldLines(r *ansibleHostResult) []string {
 	lines := []string{fmt.Sprintf("  changed: %t", r.Changed)}
+	lines = appendItemLine(lines, r)
 	lines = appendMsgLines(lines, r.Msg)
 	if r.RC != 0 {
 		lines = append(lines, fmt.Sprintf("  rc:  %d", r.RC))
@@ -272,6 +388,7 @@ func formatWarningLines(taskName string, r *ansibleHostResult) []string {
 func formatFailureLines(taskName string, r *ansibleHostResult) []string {
 	var lines []string
 	lines = append(lines, "FAILED ["+taskName+"]")
+	lines = appendItemLine(lines, r)
 	lines = appendMsgLines(lines, r.Msg)
 	if r.RC != 0 {
 		lines = append(lines, fmt.Sprintf("  rc:  %d", r.RC))
@@ -290,6 +407,13 @@ func formatFailureLines(taskName string, r *ansibleHostResult) []string {
 		for l := range strings.SplitSeq(stdout, "\n") {
 			lines = append(lines, "    "+l)
 		}
+	}
+	return lines
+}
+
+func appendItemLine(lines []string, r *ansibleHostResult) []string {
+	if item := formatCmd(r.Item); item != "" && item != "null" {
+		return append(lines, "  item: "+item)
 	}
 	return lines
 }

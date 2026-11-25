@@ -311,7 +311,11 @@ func (e ExecModel) progressBarView() string {
 			if i := strings.IndexByte(msg, '\n'); i >= 0 {
 				msg = msg[:i]
 			}
-			return lipgloss.NewStyle().Foreground(colourRed).Render(
+			style := lipgloss.NewStyle().Foreground(colourRed)
+			if e.width > 0 {
+				style = style.MaxWidth(e.width)
+			}
+			return style.Render(
 				"✘  " + fmt.Sprintf("%d tasks - %s", e.tasksDone, msg),
 			)
 		}
